@@ -139,10 +139,13 @@ void serve_static(int connfd, char *filename, int filesize) {
 
   /* Send response body to client */  
   srcfd = Open(filename, O_RDONLY, 0);
-  srcp = Mmap(0, filesize, PROT_READ, MAP_PRIVATE, srcfd, 0); // virual memory에 filesize만큼 공간을 할당받아 srcfd가 가르키는 file을 vm의 private read-only area에 할당받음. 해당 vm의 시작 포인터가 srcp
-  Close(srcfd);
+  // srcp = Mmap(0, filesize, PROT_READ, MAP_PRIVATE, srcfd, 0); // virual memory에 filesize만큼 공간을 할당받아 srcfd가 가르키는 file을 vm의 private read-only area에 할당받음. 해당 vm의 시작 포인터가 srcp
+  // Close(srcfd);
+  // Munmap(srcp, filesize);
+  srcp = (char *)Malloc(filesize);
+  Rio_readn(srcfd, srcp, filesize);
   Rio_writen(connfd, srcp, filesize);
-  Munmap(srcp, filesize);
+  free(srcp);
 }
 /*
 * get_filetype - Derive file type from filename
