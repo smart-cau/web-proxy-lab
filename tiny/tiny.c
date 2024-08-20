@@ -11,9 +11,9 @@
 void doit(int connfd);
 void read_requesthdrs(rio_t *rp);
 int parse_uri(char *uri, char *filename, char *cgiargs);
-void serve_static(int connfd, char *filename, int filesize);
+void serve_static(int connfd, char *filename, int filesize, char* method);
 void get_filetype(char *filename, char *filetype);
-void serve_dynamic(int connfd, char *filename, char *cgiargs);
+void serve_dynamic(int connfd, char *filename, char *cgiargs, char* method);
 void clienterror(int connfd, char *cause, char *errnum, char *shortmsg,
                  char *longmsg);
 
@@ -56,7 +56,7 @@ void doit(int connfd) {
   printf("%s", buf);
   sscanf(buf, "%s %s %s", method, uri, version);
   
-  if (strcasecmp(method, "GET")) {
+  if (strcasecmp(method, "GET") && strcasecmp(method, "HEAD")) {
     clienterror(connfd, method, "501", "Not implemented", "Tiny does not implement this method");
     return;
   }
@@ -75,14 +75,14 @@ void doit(int connfd) {
       clienterror(connfd, filename, "403", "Forbidden", "Tiny counldn't read the file");
       return;
     }
-    serve_static(connfd, filename, sbuf.st_size);
+    serve_static(connfd, filename, sbuf.st_size, method);
   }
   else { /* Serve dynamic content */
     if (!(S_ISREG(sbuf.st_mode)) || !(S_IXUSR & sbuf.st_mode)) {
       clienterror(connfd, filename, "403", "Forbidden", "Tiny counldn't run the CGI program");
       return;
     }
-    serve_dynamic(connfd, filename, cgiargs);
+    serve_dynamic(connfd, filename, cgiargs, method);
   }
 }
 
@@ -123,7 +123,7 @@ int parse_uri(char *uri, char *filename, char *cgiargs) {
     }
 }
 
-void serve_static(int connfd, char *filename, int filesize) {
+void serve_static(int connfd, char *filename, int filesize, char* method) {
   int srcfd;
   char *srcp, filetype[MAXLINE], buf[MAXBUF];
 
@@ -136,12 +136,16 @@ void serve_static(int connfd, char *filename, int filesize) {
   sprintf(buf, "%sContent-type: %s\r\n\r\n", buf, filetype);
   Rio_writen(connfd, buf, strlen(buf));
   printf("%s",buf);
-
+  if (!strcasecmp(method, "HEAD"))
+    return;
   /* Send response body to client */  
   srcfd = Open(filename, O_RDONLY, 0);
-  // srcp = Mmap(0, filesize, PROT_READ, MAP_PRIVATE, srcfd, 0); // virual memory에 filesize만큼 공간을 할당받아 srcfd가 가르키는 file을 vm의 private read-only area에 할당받음. 해당 vm의 시작 포인터가 srcp
-  // Close(srcfd);
-  // Munmap(srcp, filesize);
+  /* use file with memory mapping 
+    srcp = Mmap(0, filesize, PROT_READ, MAP_PRIVATE, srcfd, 0); // virual memory에 filesize만큼 공간을 할당받아 srcfd가 가르키는 file을 vm의 private read-only area에 할당받음. 해당 vm의 시작 포인터가 srcp
+    Close(srcfd);
+    Munmap(srcp, filesize);
+  */
+  
   srcp = (char *)Malloc(filesize);
   Rio_readn(srcfd, srcp, filesize);
   Rio_writen(connfd, srcp, filesize);
@@ -165,7 +169,7 @@ void get_filetype(char *filename, char *filetype) {
     strcpy(filetype, "text/plain");
 }
 
-void serve_dynamic(int connfd, char *filename, char *cgiargs) {
+void serve_dynamic(int connfd, char *filename, char *cgiargs, char* method) {
   char buf[MAXLINE], *emptylist[] = { NULL };
   /* Return first part of HTTP response */
   sprintf(buf, "HTTP/1.0 200 OK\r\n");
@@ -176,6 +180,7 @@ void serve_dynamic(int connfd, char *filename, char *cgiargs) {
   if (Fork() == 0) { /* Child */
     /* Real server would set all CGI vars here */
     setenv("QUERY_STRING", cgiargs, 1);
+    setenv("REQUEST_METHOD", method, 1);
     Dup2(connfd, STDOUT_FILENO); /* Redirect stdout to client*/
     Execve(filename, emptylist, environ); /* Run CGI program */
   }
