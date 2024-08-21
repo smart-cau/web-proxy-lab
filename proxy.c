@@ -16,6 +16,9 @@ static const char *proxy_http_version = "HTTP/1.0";
     * client가 proxy에 보낸 HTTP/1.1 요청을 서버에 HTTP/1.0으로 바꿔서 보냄
     * 이 때 client request header에 Connection: close, Proxy-connection: close를 추가하여 보낸다
     * 이렇게 server에 보내서 받은 응답을 바로 client에 forward 해준다
+  * 2. Multi-thread Proxy
+    * client 요청이 올 때마다 thread를 생성해서 처리
+    * Memory leak을 방지하기 위해 생성된 child thread는 detached mode로 사용
 */
 /* Function Prototypes */
 void transaction(int connfd);
