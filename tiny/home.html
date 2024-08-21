@@ -4,5 +4,26 @@
 <img align="middle" src="resources/godzilla.gif">
 Dave O'Hallaron
 <video src="resources/sample_vid.mpg"  muted autoplay playsinline></video>
+
+<label for="value1">Value 1:</label>
+<input type="number" id="value1" required><br><br>
+
+<label for="value2">Value 2:</label>
+<input type="number" id="value2" required><br><br>
+
+<a href="#" id="submitLink">Submit</a>
+
+<script>
+    document.getElementById('submitLink').addEventListener('click', function(e) {
+        e.preventDefault();
+        var value1 = document.getElementById('value1').value;
+        var value2 = document.getElementById('value2').value;
+        if(value1 && value2) {
+            window.location.href = '/cgi-bin/adder?' + value1 + '&' + value2;
+        } else {
+            alert('Please enter both values');
+        }
+    });
+</script>
 </body>
 </html>
