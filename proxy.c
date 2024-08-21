@@ -24,12 +24,15 @@ int parse_uri(char *url, char *uri, char *host, char *port);
 void request(int p_clientfd, char *method, char *uri, char *host);
 void response(int p_connfd, int p_clientfd);
 
+void *task_thread(void *vargp);
+
 
 int main(int argc, char **argv) {
-  int listenfd, p_connfd;
+  int listenfd, *p_connfd;
   char hostname[MAXLINE], port[MAXLINE];
   socklen_t clientlen;
   struct sockaddr_storage clientaddr;
+  pthread_t tid;
 
   /* Check command line args */
   if (argc != 2) {
@@ -41,13 +44,16 @@ int main(int argc, char **argv) {
 
   while (1) {
     clientlen = sizeof(clientaddr);
-    p_connfd = Accept(listenfd, (SA *)&clientaddr,
-                    &clientlen);
-    Getnameinfo((SA *)&clientaddr, clientlen, hostname, MAXLINE, port, MAXLINE,
-                0);
+    p_connfd = Malloc(sizeof(int));
+    *p_connfd = Accept(listenfd, (SA *)&clientaddr, &clientlen);
+    Getnameinfo((SA *)&clientaddr, clientlen, hostname, MAXLINE, port, MAXLINE, 0);
     printf("Accepted connection from (%s, %s)\n", hostname, port);
-    transaction(p_connfd);
-    Close(p_connfd);
+    /*
+      * 새로운 클라이언트 연결이 수락될 때마다 새 쓰레드를 생성
+      * task_thread 함수 == 새 쓰레드의 시작점(entry point)
+      * p_connfd(연결 파일 디스크립터의 포인터)가 새 쓰레드에 인자로 전달
+    */
+    Pthread_create(&tid, NULL, task_thread, p_connfd);
   }
 }
 
@@ -144,4 +150,17 @@ void response(int p_connfd, int p_clientfd) {
   Rio_readinitb(&rio, p_clientfd); // get response from server and save it in rio buffer
   n = Rio_readnb(&rio, buf, MAX_CACHE_SIZE); // write response in rio buffer into buf
   Rio_writen(p_connfd, buf, n); // send response to client
+}
+
+/* client 각각의 연결을 개별 thread로 처리 */
+void *task_thread(void *vargp) {
+  int p_connfd = *((int *)vargp); // vargp에는 thread 생성 시 받은 p_connfd의 pointer가 있음. p_connfd가 가르키는 값(fd)만 복사해서 저장
+  Free(vargp); // p_connfd 생성 시 할당 받았던 메모리 반환
+
+  Pthread_detach(pthread_self()); // 생성된 thread를 parent thread로부터 detach 시킴. 이로써 thread 종료 시 관련 자원을 자동으로 반환하게 함
+
+  transaction(p_connfd); // transaction 처리
+  Close(p_connfd); // 열었던 p_connfd Close
+
+  return NULL;
 }
