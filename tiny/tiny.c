@@ -16,7 +16,9 @@ void get_filetype(char *filename, char *filetype);
 void serve_dynamic(int connfd, char *filename, char *cgiargs, char* method);
 void clienterror(int connfd, char *cause, char *errnum, char *shortmsg,
                  char *longmsg);
-
+void skip_handler(int signal) {
+  return;
+}
 int main(int argc, char **argv) {
   int listenfd, connfd;
   char hostname[MAXLINE], port[MAXLINE];
@@ -30,6 +32,7 @@ int main(int argc, char **argv) {
   }
 
   listenfd = Open_listenfd(argv[1]);
+  Signal(SIGPIPE, skip_handler);
   while (1) {
     clientlen = sizeof(clientaddr);
     connfd = Accept(listenfd, (SA *)&clientaddr,
